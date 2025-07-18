@@ -6,16 +6,13 @@
 
 #define Ns 32 
 #define Nt 28
-#define START 3510
-#define STOP 4000
-#define STEP 10
 
 // index the flat prop_l/h array
-size_t idx_light(int x, int y, int z, int s1, int c1, int s2, int c2, int t) {
-    return (((((((size_t)x * Ns + y) * Ns + z) * 4 + s1) * 3 + c1) * 4 + s2) * 3 + c2) *Nt+ t;
+size_t idx_light(int x, int y, int z, int s1, int c1, int s2, int c2) {
+    return ((((((size_t)x * Ns + y) * Ns + z) * 4 + s1) * 3 + c1) * 4 + s2) * 3 + c2;
 }
-size_t idx_heavy(int x, int y, int z, int s1, int c1, int s2, int c2, int t) {
-    return (((((((size_t)x * Ns + y) * Ns + z) * 2 + s1) * 3 + c1) * 2 + s2) * 3 + c2) *Nt+t;
+size_t idx_heavy(int x, int y, int z, int s1, int c1, int s2, int c2) {
+    return ((((((size_t)x * Ns + y) * Ns + z) * 2 + s1) * 3 + c1) * 2 + s2) * 3 + c2;
 }
 
 void mat4_mult(const double complex A[4][4], const double complex B[4][4], double complex C[4][4]) {
@@ -35,7 +32,6 @@ void transform_light(
     const double complex trans[4][4], //transform mat
     const double complex trans_inv[4][4] 
 ) {
-    for (int t=0;t<Nt;t++){	
     for (int x = 0; x < Ns; x++){
     	for (int y = 0; y < Ns; y++){
     	    for (int z = 0; z < Ns; z++){
@@ -45,7 +41,7 @@ void transform_light(
 			double complex block[4][4];
 			for (int s1 = 0; s1 < 4; s1++){
 			    for (int s2 = 0; s2 < 4; s2++){
-			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t);
+			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2);
 			    	block[s1][s2] = prop_l[idx];
 			    }
 			}
@@ -60,7 +56,7 @@ void transform_light(
 			// Store result back, scaled by 1/2
 			for (int s1 = 0; s1 < 4; s1++){
 			    for (int s2 = 0; s2 < 4; s2++){
-			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t);
+			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2);
 			    	prop_tr[idx] = temp2[s1][s2] * 0.5;
 		            }
 			}
@@ -68,7 +64,6 @@ void transform_light(
 		}
 	    }
 	}
-    }
     }
 }
 
@@ -93,7 +88,6 @@ void read_light_prop(const char *filename,
     }
 
     //Read prop data
-    for (int t=0; t<Nt; t++){
     for (int x=0; x<Ns; x++){
   	for (int y=0; y<Ns; y++){
     	    for (int z=0; z<Ns; z++){
@@ -104,12 +98,12 @@ void read_light_prop(const char *filename,
     				double repart, impart;
 				if (fread(&repart,sizeof(double),1,f)!=1 ||
 				    fread(&impart,sizeof(double),1,f)!=1){
-				    fprintf(stderr, "Error reading data at t=%d x=%d y=%d z=%d s1=%d c1=%d s2=%d c2=%d\n",
-                                            t, x, y, z, s1, c1, s2, c2);
+				    fprintf(stderr, "Error reading data at x=%d y=%d z=%d s1=%d c1=%d s2=%d c2=%d\n",
+                                            x, y, z, s1, c1, s2, c2);
 				    fclose(f);
 				    exit(1);
 				}
-				size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t); 
+				size_t idx = idx_light(x, y, z, s1, c1, s2, c2); 
 				prop_l[idx] = repart+impart*I;
     			    }
     			}
@@ -117,7 +111,6 @@ void read_light_prop(const char *filename,
 		}
 	    }
 	}
-    }
     }
     fclose(f);
 }
@@ -141,7 +134,6 @@ void read_heavy_prop(const char *filename,
     } 
 
     //Read prop data
-    for (int t=0; t<Nt; t++){
     for (int s1=0; s1<2; s1++){
         for (int s2=0; s2<2; s2++){
             for (int c1=0; c1<3; c1++){
@@ -152,12 +144,12 @@ void read_heavy_prop(const char *filename,
                                 double repart, impart;
                                 if (fread(&repart,sizeof(double),1,f)!=1 ||
                                     fread(&impart,sizeof(double),1,f)!=1){
-				    fprintf(stderr, "Error reading data at t=%d x=%d y=%d z=%d s1=%d c1=%d s2=%d c2=%d\n",
-                                           t, x, y, z, s1, c1, s2, c2);
+				    fprintf(stderr, "Error reading data at x=%d y=%d z=%d s1=%d c1=%d s2=%d c2=%d\n",
+                                            x, y, z, s1, c1, s2, c2);
                                     fclose(f);
                                     exit(1);
                             	}
-				size_t idx = idx_heavy(x, y, z, s1, c1, s2, c2, t);
+				size_t idx = idx_heavy(x, y, z, s1, c1, s2, c2);
 				prop_h[idx] = repart + impart*I;
 			    }
                         }
@@ -166,60 +158,54 @@ void read_heavy_prop(const char *filename,
             }
         }
     }
-    }
     fclose(f);
 }
 
-void calc_pseudo(const double complex *arrayL, const double complex *arrayH, double *pseudo){
-    for (int t = 0; t < Nt; t++){
-	double pscalar = 0.0;
-	for (int x = 0; x < Ns; x++){
-	    for (int y = 0; y < Ns; y++){
-		for (int z = 0; z < Ns; z++){
-		    for (int c1 = 0; c1 < 3; c1++){
-			for (int c2 = 0; c2 < 3; c2++){
-			// light: [x][y][z][0..1][c1][0..1][c2]
-		        // heavy: [x][y][z][0..1][c1][0..1][c2]
+double calc_pseudo(const double complex *arrayL, const double complex *arrayH) {
+    double pscalar = 0.0;
+    for (int x = 0; x < Ns; x++){
+    	for (int y = 0; y < Ns; y++){
+    	    for (int z = 0; z < Ns; z++){
+    		for (int c1 = 0; c1 < 3; c1++){
+    		    for (int c2 = 0; c2 < 3; c2++){
+        	    // light: [x][y][z][0..1][c1][0..1][c2]
+        	    // heavy: [x][y][z][0..1][c1][0..1][c2]
 
-	         	double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t)];
-			double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t)];
-			double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t)];
-			double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t)];
+		    double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2)];
+	 	    double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2)];
+		    double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2)];
+		    double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2)];
 
-			double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t)];
-			double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t)];
-			double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t)];
-			double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t)];
+		    double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2)];
+		    double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2)];
+		    double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2)];
+		    double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2)];
 
-			// Matrix product and Hermitian conjugate (transpose + conjugate)
-			// S = l * h.H, where l and h are 2x2 matrices
-			// S[0,0] = l00*conj(h00) + l01*conj(h01)
-			// S[1,1] = l10*conj(h10) + l11*conj(h11)
-			double complex S00 = l00*conj(h00) + l01*conj(h01);
-			double complex S11 = l10*conj(h10) + l11*conj(h11);
+		    // Matrix product and Hermitian conjugate (transpose + conjugate)
+		    // S = l * h.H, where l and h are 2x2 matrices
+		    // S[0,0] = l00*conj(h00) + l01*conj(h01)
+		    // S[1,1] = l10*conj(h10) + l11*conj(h11)
+		    double complex S00 = l00*conj(h00) + l01*conj(h01);
+		    double complex S11 = l10*conj(h10) + l11*conj(h11);
 
-			pscalar += creal(S00 + S11); //trace of S
-			}
-		    }
-		}
-            }
+		    pscalar += creal(S00 + S11); //trace of S
+	            }
+    		}
+	    }
 	}
-	pseudo[t] = pscalar;
     }
+    return pscalar;
 }
 
 //////////////////////////////////////////////////////////////////////
 int main(){
 
-double pseudo_sum[Nt];
-double pseudo_avg[Nt];
-
-//double pseudo[Nt];
-//double vector[Nt];
-//for (int i=0; i<Nt; i++){
-//    pseudo[i] = 0.0;
-//    vector[i] = 0.0;
-//}
+double pseudo[Nt];
+double vector[Nt];
+for (int i=0; i<Nt; i++){
+    pseudo[i] = 0.0;
+    vector[i] = 0.0;
+}
 double complex trans[4][4] = {
     {1.0 + 0.0*I, 0.0 + 0.0*I, -1.0 + 0.0*I, 0.0 + 0.0*I},
     {0.0 + 0.0*I, 1.0 + 0.0*I,  0.0 + 0.0*I, -1.0 + 0.0*I},
@@ -232,10 +218,10 @@ for (int i = 0; i < 4; i++){
         trans_inv[i][j] = conj(trans[j][i]);
     }
 }
-//for (int nt=0; nt<Nt; nt++){
-    double complex *prop_l = malloc(sizeof(double complex)*Ns*Ns*Ns*4*3*4*3*Nt);
-    double complex *prop_h = malloc(sizeof(double complex)*Ns*Ns*Ns*2*3*2*3*Nt);
-    double complex *prop_tr = malloc(sizeof(double complex)*Ns*Ns*Ns*4*3*4*3*Nt);
+for (int nt=0; nt<Nt; nt++){
+    double complex *prop_l = malloc(sizeof(double complex)*Ns*Ns*Ns*4*3*4*3);
+    double complex *prop_h = malloc(sizeof(double complex)*Ns*Ns*Ns*2*3*2*3);
+    double complex *prop_tr = malloc(sizeof(double complex)*Ns*Ns*Ns*4*3*4*3);
     if (!prop_l || !prop_h || !prop_tr) {
     	perror("malloc prop_l/h/tr");
 	free(prop_l);
@@ -246,64 +232,31 @@ for (int i = 0; i < 4; i++){
     
     char hfile[256];
     char lfile[256];
-    int ncfg = 0;
-    for (int cfg=START; cfg<=STOP; cfg+=STEP){
-    	double pseudo[Nt];
-    	double vector[Nt];
-    	for (int i=0; i<Nt; i++){
-            pseudo[i] = 0.0;
-            vector[i] = 0.0;
-    	}
- 
-    	sprintf(hfile,"/data/rachel/Bmeson/nrqcd/propagators/%dx%d/prop/sprop/sprop.%dx%d_%d", 
-		    Ns,Nt,Ns,Nt,cfg);
-    	sprintf(lfile, "/data/rachel/Bmeson/rqcd/propagators/%dx%d/light/s0/Gen2_%dx%dcfgn%d.s0.m0", 
-		    Ns,Nt,Ns,Nt,cfg);
-	
-	// Check heavy file
-        FILE *fh = fopen(hfile, "rb");
-        if (!fh) {
-            printf("Warning: Cannot open heavy file for config %d, skipping.\n", cfg);
-            continue;
-        }
-        fclose(fh);
+    int i = 3510;
+    sprintf(hfile, "/data/rachel/Bmeson/nrqcd/propagators/%dx%d/prop/sprop/sprop.%dx%d_%d", 
+		    Ns,Nt,Ns,Nt,i);
+    sprintf(lfile, "/data/rachel/Bmeson/rqcd/propagators/%dx%d/light/s0/Gen2_%dx%dcfgn%d.s0.m0", 
+		    Ns,Nt,Ns,Nt,i);
 
-        // Check light file
-        FILE *fl = fopen(lfile, "rb");
-        if (!fl) {
-            printf("Warning: Cannot open light file for config %d, skipping.\n", cfg);
-            continue;
-        }
-        fclose(fl);
-
-    	read_heavy_prop(hfile, prop_h);
-    	read_light_prop(lfile, prop_l);
-    	printf("Files read successfully!\n");
-    
-    	transform_light(prop_l, prop_tr, trans, trans_inv);
-    	calc_pseudo(prop_tr, prop_h, pseudo);
- 	printf("Calculated pseudoscalar:");
-    	for (int t = 0; t < Nt; t++) {
-	    printf("pseudo[%d] = %f\n", t, pseudo[t]);
-    	    pseudo_sum[t] += pseudo[t];
+    read_heavy_prop(hfile, prop_h);
+    read_light_prop(lfile, prop_l);
+    if (nt == Nt-1){
+        printf("Files read successfully!\n");
+    }
+    transform_light(prop_l, prop_tr, trans, trans_inv);
+    pseudo[nt] = calc_pseudo(prop_tr, prop_h);
+    if (nt == Nt-1){
+    	printf("Calculated pseudoscalar:");
+	for (int t = 0; t < Nt; t++) {
+	    printf("pseudo[%d] = %f\n,", t, pseudo[t]);
 	}
-	ncfg++;
     }
-    
-    for (int t=0;t <=Nt; t++){
-	pseudo_avg[t] = pseudo_sum[t] / ncfg;
-    }
-    printf("\nAveraged pseudoscalar over %d configs:\n", ncfg);
-    for (int t = 0; t < Nt; t++) {
-        printf("pseudo_avg[%d] = %f\n", t, pseudo_avg[t]);
-    }
-
     free(prop_l);
     free(prop_h);
     free(prop_tr);
+}
 
-
-    return 0;
+return 0;
 
 }
 
