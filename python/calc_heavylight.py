@@ -8,8 +8,6 @@ import os
 
 def Calc_pseudo(arrayL, arrayH):
     """calc vacuum expectaion value for each time step - pseudoscalar""" 
-
-
     pscalar = complex(0,0)
     for x,y,z,c1,c2 in it.product(range(Ns), range(Ns), range(Ns), range(3), range(3)):
         l = np.matrix(arrayL[x,y,z,:2,c1,:2,c2], dtype=complex)
@@ -21,9 +19,7 @@ def Calc_pseudo(arrayL, arrayH):
 
 def Calc_vector(arrayL, arrayH):
     """calc vacuum expectation value for each time step - vector """
-    
     vector_val = 0
-    
     for x,y,z,c1,c2 in it.product(range(Ns), range(Ns), range(Ns), range(3), range(3)):
 
         l = np.matrix(arrayL[x,y,z,:2,c1,:2,c2])
@@ -39,14 +35,12 @@ def Calc_vector(arrayL, arrayH):
 
 def Calc_correlator(filename_l, filename_h):
  ##import the propagators
-
     numdoub_l = (Ns**3)*4*4*3*3*2 
     numbyt_l = 8*numdoub_l
 
     numdoub_h = (Ns**3)*2*2*3*3*2
     numbyt_h = 8*numdoub_h
 
-    
     with open(filename_l, 'rb') as light, open(filename_h, 'rb') as heavy:#read file and extract prop    
         #save 4 ints at start of file (light)  
         data = light.read(16)
@@ -82,7 +76,7 @@ def Calc_correlator(filename_l, filename_h):
             #change light prop chiral to NR rep
             for x,y,z,c1,c2 in it.product(range(Ns), range(Ns), range(Ns), range(3), range(3)):
                 #prop_tran[x,y,z,:,c1,:,c2] = trans_matrix_inv*prop_l[x,y,z,:,c1,:,c2]*trans_matrix*(1/2)
-                prop_tran[x,y,z,:,c1,:,c2] = trans_matrix*prop_l[x,y,z,:,c1,:,c2]*trans_matrix_inv*(1/2)
+                prop_tran[x,y,z,:,c1,:,c2] = trans_matrix*prop_l[x,y,z,:,c1,:,c2]*trans_matrix_inv
 
 
             #read in heavy prop
@@ -91,10 +85,8 @@ def Calc_correlator(filename_l, filename_h):
 
                 pointer_h += 16
 
-
             pseudo[t] = Calc_pseudo(prop_tran, prop_h)
             vector[t] = Calc_vector(prop_tran, prop_h)
-
 
     light.close()
     heavy.close()
@@ -165,18 +157,9 @@ else:
 print(number_of_cfgs)
 pseudo = []
 vector = []
-#for l_file in l_files:
-#    for h_file in h_files:
-#        ps, v = Calc_correlator(l_file, h_file)
-#        pseudo.append(ps)
-#        vector.append(v)
-
 
 numcfgs=0
 for i in range(6010,6020,10):
-    #for x in l_files:
-     #   for y in h_files:
-    #if str(i) in l_files and str(i) in h_files:
     if any(str(i) in x for x in l_files) and any(str(i) in x for x in h_files):
         ps, v = Calc_correlator(light_dir+f'/Gen2_{Ns}x{Nt}cfgn{i}.s0.m0',  heavy_dir+f'/sprop.{Ns}x{Nt}_{i}')
         cfg = np.array([i])
@@ -184,15 +167,12 @@ for i in range(6010,6020,10):
         v = np.hstack((cfg, v))
         pseudo.append(np.real(ps))
         vector.append(np.real(v))
-        #numcfgs += 1
         with open(file_dir+f'/hl_ps_{Ns}x{Nt}.csv', 'a') as file:
-        #    for i in range(numcfgs):
             write = writer(file)
             write.writerow(pseudo[numcfgs])
             file.close()
 
         with open(file_dir+f'/hl_v_{Ns}x{Nt}.csv', 'a') as file:
-            #for i in range(numcfgs):
             write = writer(file)
             write.writerow(vector[numcfgs])
             file.close()
@@ -200,60 +180,8 @@ for i in range(6010,6020,10):
     else:
         print(f'no {i}')
 
-"""
-numcfgs = 0
-for i in range(2200,2500,10):
-    for x in l_files:
-        for y in h_files:
-            if str(i) in x and str(i) in y:
-                ps, v = Calc_correlator(light_dir+f'/Gen2_{Ns}x{Nt}cfgn{i}.s0.m0',  heavy_dir+f'/sprop.{Ns}x{Nt}_{i}')
-                cfg = np.array([i])
-                ps = np.hstack((cfg, ps))
-                v = np.hstack((cfg, v))
-                pseudo.append(np.real(ps))
-                vector.append(np.real(v))
-                numcfgs += 1
-            #else:
-              #  print(f'No {i} file')
 
 
-for i in range(number_of_cfgs):
-    #if f'Gen2_${Ns}x{Nt}cfgn{j}.s0.m0' in l_files and f'sprop.{Ns}x{Nt}_{j}' in h_files:
-    ps, v = Calc_correlator(light_dir+f'/Gen2_{Ns}x{Nt}cfgn{j}.s0.m0',  heavy_dir+f'/sprop.{Ns}x{Nt}_{j}')
-    pseudo.append(np.real(ps))
-    vector.append(np.real(v))
-    numcfgs += 1
-    #else:
-    #    print(f'No {j} file')
-    with open(file_dir+f'/hl_ps_{Ns}x{Nt}.csv', 'a') as file:
-        for i in range(numcfgs):
-            write = writer(file)
-            write.writerow(pseudo[i])
-        file.close()
-
-    with open(file_dir+f'/hl_v_{Ns}x{Nt}.csv', 'a') as file:
-        for i in range(numcfgs):
-            write = writer(file)
-            write.writerow(vector[i])
-        file.close()
-
-    j += 20
-
-    #pseudo.append(np.real(ps))
-    #vector.append(np.real(v))
-"""
-
-with open(file_dir+f'/hl_ps_{Ns}x{Nt}.csv', 'a') as file:
-    for i in range(numcfgs):
-        write = writer(file)
-        write.writerow(pseudo[i])
-    file.close()
-
-with open(file_dir+f'/hl_v_{Ns}x{Nt}.csv', 'a') as file:
-    for i in range(numcfgs):
-        write = writer(file)
-        write.writerow(vector[i])
-    file.close()
 
 
 
