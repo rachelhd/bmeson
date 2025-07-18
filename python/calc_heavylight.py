@@ -179,9 +179,12 @@ for i in range(6010,6020,10):
         numcfgs+=1
     else:
         print(f'no {i}')
+<<<<<<< HEAD
 
 
 
 
 
 
+=======
+>>>>>>> c
