@@ -6,8 +6,8 @@
 
 #define Ns 32 
 #define Nt 28
-#define START 3510
-#define STOP 4000
+#define START 4000
+#define STOP 4100
 #define STEP 10
 
 // index the flat prop_l/h array
@@ -208,11 +208,70 @@ void calc_pseudo(const double complex *arrayL, const double complex *arrayH, dou
     }
 }
 
+void calc_vector(const double complex *arrayL, const double complex *arrayH, double *vector){
+    
+    double complex S15[2][2]={
+	    {0.0 + 0.0*I, 0.0 + 1.0*I},
+	    {0.0 + 1.0*I, 0.0 + 0.0*I}
+    };
+    double complex S25[2][2]={
+            {0.0 + 0.0*I, 1.0 + 0.0*I},
+            {-1.0 + 0.0*I, 0.0 + 0.0*I}
+    };
+    double complex S35[2][2]={
+            {0.0 + 1.0*I, 0.0 + 0.0*I},
+            {0.0 + 0.0*I, 0.0 - 1.0*I}
+    };
+    for (int t = 0; t < Nt; t++){
+        double vectorval = 0.0;
+        for (int x = 0; x < Ns; x++){
+            for (int y = 0; y < Ns; y++){
+                for (int z = 0; z < Ns; z++){
+                    for (int c1 = 0; c1 < 3; c1++){
+                        for (int c2 = 0; c2 < 3; c2++){
+                        // light: [x][y][z][0..1][c1][0..1][c2]
+                        // heavy: [x][y][z][0..1][c1][0..1][c2]
+
+                        double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t)];
+                        double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t)];
+                        double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t)];
+                        double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t)];
+
+                        double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t)];
+                        double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t)];
+                        double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t)];
+                        double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t)];
+
+                        // Matrix product and Hermitian conjugate (transpose + conjugate)
+                        // Ti = Si5.H * h * Si5 l.H, where l and h are 2x2 matrices
+                        // T1/2[0,0] =  
+                        double complex T100 = -S15[0][1]*h10*S15[0][1]*conj(l01) -S15[0][1]*h11*S15[1][0]*l00;
+			double complex T111 = -S15[1][0]*h00*S15[0][1]*l11 -S15[1][0]*h00*S15[1][0]*conj(l10);
+                        vectorval += creal(T100 + T111); //trace of T1
+                        
+			double complex T200 = -S25[0][1]*h10*S25[0][1]*conj(l01) -S25[0][1]*h11*S25[1][0]*l00;
+                        double complex T211 = -S25[1][0]*h00*S25[0][1]*l11 -S25[1][0]*h00*S25[1][0]*conj(l10);
+                        vectorval += creal(T200 + T211); //trace of T1
+			
+			double complex T300 = -S35[0][0]*h00*S35[0][0]*l00 -S35[0][0]*h01*S35[1][1]*conj(l01);
+                        double complex T311 = -S35[1][1]*h10*S35[0][0]*conj(l10) -S35[1][1]*h11*S35[1][1]*l11;
+                        vectorval += creal(T300 + T311); //trace of T1
+
+			}
+                    }
+                }
+            }
+        }
+        vector[t] = vectorval;
+    }
+
+}
 //////////////////////////////////////////////////////////////////////
 int main(){
 
 double pseudo_sum[Nt];
 double pseudo_avg[Nt];
+double vector_sum[Nt];
 
 //double pseudo[Nt];
 //double vector[Nt];
@@ -287,6 +346,12 @@ for (int i = 0; i < 4; i++){
 	    printf("pseudo[%d] = %f\n", t, pseudo[t]);
     	    pseudo_sum[t] += pseudo[t];
 	}
+	calc_vector(prop_tr, prop_h, vector);
+	printf("Calculated vector:");
+	for (int t = 0; t < Nt; t++) {
+            printf("vector[%d] = %f\n", t, vector[t]);
+            vector_sum[t] += vector[t];
+        }
 	ncfg++;
     }
     
