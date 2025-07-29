@@ -1,0 +1,9 @@
+Ns 32
+Nt 28
+start 4000 
+stop 4100
+step 10
+light_dir /data/rachel/Bmeson/rqcd/propagators/32x28/light/s0
+heavy_dir /data/rachel/Bmeson/nrqcd/propagators/32x28/prop/sprop
+psfile /home/postgrad/rachelhd/Bmeson/hl_corrs/Gen2/testc/hl_ps_32x28.csv
+vfile /home/postgrad/rachelhd/Bmeson/hl_corrs/Gen2/testc/hl_v22_32x28.csv

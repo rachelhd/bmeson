@@ -3,18 +3,50 @@
 #include <complex.h>
 #include <stdint.h>
 #include <errno.h>
+#include <string.h>
 
-#define Ns 32 
-#define Nt 28
-#define START 4000
-#define STOP 4100
-#define STEP 10
+//#define Ns 32 
+//#define Nt 28
+//#define START 4000
+//#define STOP 4100
+//#define STEP 10
+
+typedef struct {
+    int Ns;
+    int Nt;
+    int start;
+    int stop;
+    int step;
+    char light_dir[256];
+    char heavy_dir[256];
+    char psfile[256];
+    char vfile[256];
+} InputParams;
+
+int read_input_file(const char* filename, InputParams* params) {
+    FILE* f = fopen(filename, "r");
+    if (!f) return -1;
+    char key[64], value[256];
+    while (fscanf(f, "%63s %255[^\n]", key, value) == 2) {
+        if (strcmp(key, "Ns") == 0) params->Ns = atoi(value);
+        else if (strcmp(key, "Nt") == 0) params->Nt = atoi(value);
+	else if (strcmp(key, "start") == 0) params->start = atoi(value);
+	else if (strcmp(key, "stop") == 0) params->stop = atoi(value);
+	else if (strcmp(key, "step") == 0) params->step = atoi(value);
+        else if (strcmp(key, "light_dir") == 0) strncpy(params->light_dir, value, 255);
+        else if (strcmp(key, "heavy_dir") == 0) strncpy(params->heavy_dir, value, 255);
+        else if (strcmp(key, "psfile") == 0) strncpy(params->psfile, value, 255);
+	else if (strcmp(key, "vfile") == 0) strncpy(params->vfile, value, 255);
+    }
+    fclose(f);
+    return 0;
+}
 
 // index the flat prop_l/h array
-size_t idx_light(int x, int y, int z, int s1, int c1, int s2, int c2, int t) {
+size_t idx_light(int x, int y, int z, int s1, int c1, int s2, int c2, int t, int Ns, int Nt) {
     return (((((((size_t)x * Ns + y) * Ns + z) * 4 + s1) * 3 + c1) * 4 + s2) * 3 + c2) *Nt+ t;
 }
-size_t idx_heavy(int x, int y, int z, int s1, int c1, int s2, int c2, int t) {
+size_t idx_heavy(int x, int y, int z, int s1, int c1, int s2, int c2, int t, int Ns, int Nt) {
     return (((((((size_t)x * Ns + y) * Ns + z) * 2 + s1) * 3 + c1) * 2 + s2) * 3 + c2) *Nt+t;
 }
 
@@ -33,7 +65,9 @@ void transform_light(
     const double complex *prop_l,  // input, chiral basis
     double complex *prop_tr,     // output, NR basis
     const double complex trans[4][4], //transform mat
-    const double complex trans_inv[4][4] 
+    const double complex trans_inv[4][4],
+    int Ns,
+    int Nt
 ) {
     for (int t=0;t<Nt;t++){	
     for (int x = 0; x < Ns; x++){
@@ -45,7 +79,7 @@ void transform_light(
 			double complex block[4][4];
 			for (int s1 = 0; s1 < 4; s1++){
 			    for (int s2 = 0; s2 < 4; s2++){
-			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t);
+			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t, Ns, Nt);
 			    	block[s1][s2] = prop_l[idx];
 			    }
 			}
@@ -60,7 +94,7 @@ void transform_light(
 			// Store result back, scaled by 1/2
 			for (int s1 = 0; s1 < 4; s1++){
 			    for (int s2 = 0; s2 < 4; s2++){
-			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t);
+			    	size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t, Ns, Nt);
 			    	prop_tr[idx] = temp2[s1][s2] * 0.5;
 		            }
 			}
@@ -74,7 +108,7 @@ void transform_light(
 
 //read binary light prop file
 void read_light_prop(const char *filename, 
-                     double complex *prop_l){
+                     double complex *prop_l, int Ns, int Nt){
     FILE *f = fopen(filename, "rb");
     if (!f){
         //fprintf(stderr, "Unable to open file '%s': %d\n", filename, strerror(errno));
@@ -109,7 +143,7 @@ void read_light_prop(const char *filename,
 				    fclose(f);
 				    exit(1);
 				}
-				size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t); 
+				size_t idx = idx_light(x, y, z, s1, c1, s2, c2, t, Ns, Nt); 
 				prop_l[idx] = repart+impart*I;
     			    }
     			}
@@ -124,7 +158,7 @@ void read_light_prop(const char *filename,
 
 //read binary heavy prop file
 void read_heavy_prop(const char *filename,
-                     double complex *prop_h){
+                     double complex *prop_h, int Ns, int Nt){
     FILE *f = fopen(filename, "rb");
     if (!f){
         //fprintf(stderr, "Unable to open file '%s': %d\n", filename, strerror(errno));
@@ -157,7 +191,7 @@ void read_heavy_prop(const char *filename,
                                     fclose(f);
                                     exit(1);
                             	}
-				size_t idx = idx_heavy(x, y, z, s1, c1, s2, c2, t);
+				size_t idx = idx_heavy(x, y, z, s1, c1, s2, c2, t, Ns, Nt);
 				prop_h[idx] = repart + impart*I;
 			    }
                         }
@@ -170,7 +204,7 @@ void read_heavy_prop(const char *filename,
     fclose(f);
 }
 
-void calc_pseudo(const double complex *arrayL, const double complex *arrayH, double *pseudo){
+void calc_pseudo(const double complex *arrayL, const double complex *arrayH, double *pseudo, int Ns, int Nt){
     for (int t = 0; t < Nt; t++){
 	double pscalar = 0.0;
 	for (int x = 0; x < Ns; x++){
@@ -181,15 +215,15 @@ void calc_pseudo(const double complex *arrayL, const double complex *arrayH, dou
 			// light: [x][y][z][0..1][c1][0..1][c2]
 		        // heavy: [x][y][z][0..1][c1][0..1][c2]
 
-	         	double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t)];
-			double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t)];
-			double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t)];
-			double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t)];
+	         	double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t, Ns, Nt)];
+			double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t, Ns, Nt)];
+			double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t, Ns, Nt)];
+			double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t, Ns, Nt)];
 
-			double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t)];
-			double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t)];
-			double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t)];
-			double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t)];
+			double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t, Ns, Nt)];
+			double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t, Ns, Nt)];
+			double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t, Ns, Nt)];
+			double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t, Ns, Nt)];
 
 			// Matrix product and Hermitian conjugate (transpose + conjugate)
 			// S = l * h.H, where l and h are 2x2 matrices
@@ -208,7 +242,7 @@ void calc_pseudo(const double complex *arrayL, const double complex *arrayH, dou
     }
 }
 
-void calc_vector(const double complex *arrayL, const double complex *arrayH, double *vector){
+void calc_vector(const double complex *arrayL, const double complex *arrayH, double *vector, int Ns, int Nt){
     
     double complex S15[2][2]={
 	    {0.0 + 0.0*I, 0.0 + 1.0*I},
@@ -232,15 +266,15 @@ void calc_vector(const double complex *arrayL, const double complex *arrayH, dou
                         // light: [x][y][z][0..1][c1][0..1][c2]
                         // heavy: [x][y][z][0..1][c1][0..1][c2]
 
-                        double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t)];
-                        double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t)];
-                        double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t)];
-                        double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t)];
+                        double complex l00 = arrayL[idx_light(x, y, z, 0, c1, 0, c2, t, Ns, Nt)];
+                        double complex l01 = arrayL[idx_light(x, y, z, 0, c1, 1, c2, t, Ns, Nt)];
+                        double complex l10 = arrayL[idx_light(x, y, z, 1, c1, 0, c2, t, Ns, Nt)];
+                        double complex l11 = arrayL[idx_light(x, y, z, 1, c1, 1, c2, t, Ns, Nt)];
 
-                        double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t)];
-                        double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t)];
-                        double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t)];
-                        double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t)];
+                        double complex h00 = arrayH[idx_heavy(x, y, z, 0, c1, 0, c2, t, Ns, Nt)];
+                        double complex h01 = arrayH[idx_heavy(x, y, z, 0, c1, 1, c2, t, Ns, Nt)];
+                        double complex h10 = arrayH[idx_heavy(x, y, z, 1, c1, 0, c2, t, Ns, Nt)];
+                        double complex h11 = arrayH[idx_heavy(x, y, z, 1, c1, 1, c2, t, Ns, Nt)];
 
                         // Matrix product and Hermitian conjugate (transpose + conjugate)
                         // Ti = Si5.H * h * Si5 l.H, where l and h are 2x2 matrices
@@ -266,19 +300,22 @@ void calc_vector(const double complex *arrayL, const double complex *arrayH, dou
     }
 
 }
+
+void append_csv(const char* filename, double* arr, int n) {
+    FILE* f = fopen(filename, "a");
+    if(!f) { perror("cannot open output csv"); exit(1);}
+    for(int i=0;i<n;i++) {
+        fprintf(f, "%f%s", arr[i], (i==n-1)?"\n":",");
+    }
+    fclose(f);
+}
 //////////////////////////////////////////////////////////////////////
 int main(){
 
-double pseudo_sum[Nt];
-double pseudo_avg[Nt];
-double vector_sum[Nt];
-
-//double pseudo[Nt];
-//double vector[Nt];
-//for (int i=0; i<Nt; i++){
-//    pseudo[i] = 0.0;
-//    vector[i] = 0.0;
-//}
+InputParams params = {0};
+read_input_file("heavylight.in", &params);
+int Nt = params.Nt;
+int Ns = params.Ns;
 double complex trans[4][4] = {
     {1.0 + 0.0*I, 0.0 + 0.0*I, -1.0 + 0.0*I, 0.0 + 0.0*I},
     {0.0 + 0.0*I, 1.0 + 0.0*I,  0.0 + 0.0*I, -1.0 + 0.0*I},
@@ -303,10 +340,9 @@ for (int i = 0; i < 4; i++){
     	exit(1);
     }
     
-    char hfile[256];
-    char lfile[256];
-    int ncfg = 0;
-    for (int cfg=START; cfg<=STOP; cfg+=STEP){
+    char hfile[512];
+    char lfile[512];
+    for (int cfg=params.start; cfg<=params.stop; cfg+=params.step){
     	double pseudo[Nt];
     	double vector[Nt];
     	for (int i=0; i<Nt; i++){
@@ -314,10 +350,8 @@ for (int i = 0; i < 4; i++){
             vector[i] = 0.0;
     	}
  
-    	sprintf(hfile,"/data/rachel/Bmeson/nrqcd/propagators/%dx%d/prop/sprop/sprop.%dx%d_%d", 
-		    Ns,Nt,Ns,Nt,cfg);
-    	sprintf(lfile, "/data/rachel/Bmeson/rqcd/propagators/%dx%d/light/s0/Gen2_%dx%dcfgn%d.s0.m0", 
-		    Ns,Nt,Ns,Nt,cfg);
+    	sprintf(hfile, "%s/sprop.%dx%d_%d", params.heavy_dir,Ns,Nt,cfg);
+    	sprintf(lfile, "%s/Gen2_%dx%dcfgn%d.s0.m0", params.light_dir,Ns,Nt,cfg);
 	
 	// Check heavy file
         FILE *fh = fopen(hfile, "rb");
@@ -335,33 +369,27 @@ for (int i = 0; i < 4; i++){
         }
         fclose(fl);
 
-    	read_heavy_prop(hfile, prop_h);
-    	read_light_prop(lfile, prop_l);
-    	printf("Files read successfully!\n");
+    	read_heavy_prop(hfile, prop_h, Ns, Nt);
+    	read_light_prop(lfile, prop_l, Ns, Nt);
     
-    	transform_light(prop_l, prop_tr, trans, trans_inv);
-    	calc_pseudo(prop_tr, prop_h, pseudo);
- 	printf("Calculated pseudoscalar:");
-    	for (int t = 0; t < Nt; t++) {
-	    printf("pseudo[%d] = %f\n", t, pseudo[t]);
-    	    pseudo_sum[t] += pseudo[t];
+    	transform_light(prop_l, prop_tr, trans, trans_inv, Ns, Nt);
+    	calc_pseudo(prop_tr, prop_h, pseudo, Ns, Nt);
+	calc_vector(prop_tr, prop_h, vector, Ns, Nt);
+
+	// Save: [cfg, pseudo[0], pseudo[1], ...]
+        double outps[Nt+1];
+	double outv[Nt+1];
+        outps[0]=(double)cfg;
+	outv[0]=(double)cfg;
+        for(int t=0;t<Nt;t++){ 
+	    outps[t+1]=pseudo[t];
+	    outv[t+1]=vector[t];
 	}
-	calc_vector(prop_tr, prop_h, vector);
-	printf("Calculated vector:");
-	for (int t = 0; t < Nt; t++) {
-            printf("vector[%d] = %f\n", t, vector[t]);
-            vector_sum[t] += vector[t];
-        }
-	ncfg++;
+        append_csv(params.psfile, outps, Nt+1);
+	append_csv(params.vfile, outv, Nt+1);
     }
     
-    for (int t=0;t <=Nt; t++){
-	pseudo_avg[t] = pseudo_sum[t] / ncfg;
-    }
-    printf("\nAveraged pseudoscalar over %d configs:\n", ncfg);
-    for (int t = 0; t < Nt; t++) {
-        printf("pseudo_avg[%d] = %f\n", t, pseudo_avg[t]);
-    }
+    //
 
     free(prop_l);
     free(prop_h);
